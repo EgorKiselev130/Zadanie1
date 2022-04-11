@@ -1,0 +1,59 @@
+#Киселев Егор Дмитриевич — для региона 74 рассчитайте урожайность пшеницы в 2012 году, взяв для рассчета средние суммы активных температур за предыдущие 5 лет, с 30 ближайших метеостанций
+#Подключим нужные 
+library(lubridate)
+library(stringr)
+library(ggplot2)
+library(tidyverse)
+library(rnoaa)
+#station_data = ghcnd_stations() #Может занять несколько минут лучше выполнить один раз в месте с хорошим интернетом и сохранить результат
+setwd("~/Desktop")
+station_data = read.csv("station_data.csv")
+#После получения всписка всех станций, получите список станций ближайших к столице вашего региона,создав таблицу с именем региона и координатами его столицы
+chelyabinsk = data.frame(id = "CHELYABINSK", latitude = 55.159902,  longitude = 61.402554)
+chelyabinsk_around = meteo_nearby_stations(lat_lon_df = chelyabinsk, station_data = station_data,
+                                    limit = 30, var = c("PRCP", "TAVG"),
+                                    year_min = 2007, year_max = 2012)
+#chelyabinsk_around это список единственным элементом которого является таблица, содержащая идентификаторы метеостанций отсортированных по их 
+# удалленности от Челябинска, очевидно что первым элементом таблицы будет идентификатор метеостанции Челябинска, его то мы и попытаемся получить
+chelyabinsk_id = chelyabinsk_around[["CHELYABINSK"]][["id"]][1]
+str(chelyabinsk_around)
+#Для получения всех данных с метеостанции, зная ее идентификатор, используйте след. команду
+all_chelyabinsk_data = meteo_tidy_ghcnd(stationid = chelyabinsk_id)
+chelyabinsk_table=chelyabinsk_around[[1]]
+summary(chelyabinsk_table)
+all_i=data.frame()
+all_chelyabinsk=data.frame()
+for(i in 1:30)
+{all_i = meteo_tidy_ghcnd(stationid=chelyabinsk_around[["CHELYABINSK"]][["id"]][i])
+all_i=all_i[ ,c("id","date", "tavg")]
+print(all_i)
+all_chelyabinsk=rbind(all_chelyabinsk, all_i)}
+#Средняя сумма активных температур
+data_chelyabinsk=all_chelyabinsk %>% 
+  mutate(date=ymd(date),
+         year=year(date),
+         month=month(date)) %>% 
+  mutate(tavg=case_when(tavg<50 ~ 0, TRUE ~ tavg)/10) %>% 
+  filter (year>2007 & year<2012) %>% 
+  group_by(id,year,month) %>% 
+  summarize(tsum=sum(tavg, na.rm=T)) %>% 
+  group_by(month) %>% summarize(St = mean(tsum, na.rm=T))
+afi=c(0.00,0.00,0.00,32.11,26.31,25.64,32.20,18.73,
+      16.30,13.83,0.00,0.00)
+bfi=c(0.00,0.00,0.00,11.30,9.26,9.03,8.16,6.59,5.73,
+      4.87,0.00,0.00)
+di=c(0.00,0.00,0.00,0.33,1.00,1.00,1.00,0.32,0.00,
+     0.00,0.00,0.00)
+y=1.0
+Kf=300
+Qj=1600
+Lj=2.2
+Ej=25
+#Рассчитаем урожайность по месяцам
+data_chelyabinsk= data_chelyabinsk %>% 
+  mutate(Fi=(afi)+(bfi)*y*(data_chelyabinsk$St))
+data_chelyabinsk= data_chelyabinsk %>% mutate(Yj=(((data_chelyabinsk$Fi)*(di)*Kf)/(Qj*Lj*(100-Ej))))
+#Расчитываем суммарную урожайность как сумму по месяцам
+YIELD=sum(data_chelyabinsk$Yj);YIELD
+# Ответ: 16.82 ц/га
+
